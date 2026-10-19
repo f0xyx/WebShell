@@ -1,6 +1,6 @@
 <?php
 
-$wp_file = __DIR__ . '/../../../../wp-load.php';
+$wp_file = __DIR__ . '/wp-load.php';
 
 echo '<div class="text-sm font-semibold mb-3">Create WP Admin</div>';
 echo '<div class="text-xs">';
