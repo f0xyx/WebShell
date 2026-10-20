@@ -1,74 +1,114 @@
+
 <?php
+declare(strict_types=1);
 
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-// Cek apakah tombol submit sudah ditekan
-if (isset($_POST['submit'])) {
-    // Ambil informasi file dari variabel global $_FILES
-    $namaFile = $_FILES['berkas']['name'];
-    $ukuranFile = $_FILES['berkas']['size'];
-    $error = $_FILES['berkas']['error'];
-    $tmpName = $_FILES['berkas']['tmp_name'];
+$message = '';
+$status = '';
 
-    // 1. Cek apakah tidak ada file yang di-upload
-    if ($error === 4) {
-        echo "<script>alert('Pilih file terlebih dahulu!'); window.location='index.php';</script>";
-        return;
-    }
+$uploadDir = __DIR__ . DIRECTORY_SEPARATOR;
+$maxSize = 10 * 1024 * 1024; // 10 MB
 
-    // 2. Batasi ukuran file (Contoh: maksimal 2 MB / 2000000 byte)
-    if ($ukuranFile > 2000000) {
-        echo "<script>alert('Ukuran file terlalu besar! Maksimal 2MB.'); window.location='index.php';</script>";
-        return;
-    }
-
-    // Ambil ekstensi asli file untuk digabungkan dengan nama unik
-    $ekstensiFile = explode('.', $namaFile);
-    $ekstensiFile = strtolower(end($ekstensiFile));
-
-    // 3. Buat nama file baru yang unik
-    $namaFileBaru = uniqid();
-    $namaFileBaru .= '.';
-    $namaFileBaru .= $ekstensiFile;
-
-    // 4. Pastikan folder 'uploads/' ada, jika belum buat secara otomatis
-    $tujuanFolder = 'uploads/';
-    if (!is_dir($tujuanFolder)) {
-        mkdir($tujuanFolder, 0777, true);
-    }
-
-    // 5. Pindahkan file dari direktori sementara ke folder tujuan
-    $targetFile = $tujuanFolder . $namaFileBaru;
-    if (move_uploaded_file($tmpName, $targetFile)) {
-        
-        // --- MEMBUAT URL PATH OTOMATIS ---
-        // Mendapatkan protokol (http atau https)
-        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
-        
-        // Mendapatkan host/domain (contoh: localhost atau namadomain.com)
-        $host = $_SERVER['HTTP_HOST'];
-        
-        // Mendapatkan path direktori proyek saat ini
-        $pathDirektori = rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
-        
-        // Menggabungkan semuanya menjadi URL lengkap menuju file
-        $urlFile = $protocol . "://" . $host . $pathDirektori . "/" . $targetFile;
-
-        // Tampilkan hasil ke pengguna
-        echo "<h3>Upload Berhasil!</h3>";
-        echo "Nama file baru: <b>$namaFileBaru</b><br><br>";
-        echo "Path URL File:<br>";
-        echo "<input type='text' value='$urlFile' style='width: 80%; padding: 5px;' readonly><br><br>";
-        echo "<a href='$urlFile' target='_blank'>Buka File di Tab Baru</a> | ";
-        echo "<a href='index.php'>Upload file lain</a>";
-
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!isset($_FILES['file']) || is_array($_FILES['file']['error'])) {
+        $message = 'File tidak valid.';
+        $status = 'error';
     } else {
-        echo "<script>alert('Gagal mengunggah file!'); window.location='index.php';</script>";
+        $file = $_FILES['file'];
+
+        if ($file['error'] !== UPLOAD_ERR_OK) {
+            $message = 'Upload gagal. Kode: ' . $file['error'];
+            $status = 'error';
+        } elseif ($file['size'] > $maxSize) {
+            $message = 'Ukuran maksimal 10 MB.';
+            $status = 'error';
+        } elseif (!is_uploaded_file($file['tmp_name'])) {
+            $message = 'File upload tidak valid.';
+            $status = 'error';
+        } else {
+            $originalName = basename(
+                str_replace('\\', '/', (string) $file['name'])
+            );
+
+            // Pertahankan ekstensi asli tanpa whitelist.
+            $extension = pathinfo($originalName, PATHINFO_EXTENSION);
+            $filename = bin2hex(random_bytes(12));
+
+            if ($extension !== '') {
+                $extension = preg_replace(
+                    '/[^a-zA-Z0-9_-]/',
+                    '',
+                    $extension
+                );
+                if ($extension !== '') {
+                    $filename .= '.' . $extension;
+                }
+            }
+
+            $destination = $uploadDir . $filename;
+
+            if (move_uploaded_file($file['tmp_name'], $destination)) {
+                $message = 'Upload berhasil: ' . $filename;
+                $status = 'success';
+            } else {
+                $message = 'Gagal menyimpan file. Periksa izin direktori.';
+                $status = 'error';
+            }
+        }
     }
-} else {
-    // Jika diakses langsung tanpa lewat form, kembalikan ke index.php
-    header("Location: index.php");
-    exit;
 }
 ?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Upload File</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 480px;
+            margin: 60px auto;
+            padding: 20px;
+            background: #f4f4f4;
+        }
+        .container {
+            padding: 24px;
+            background: #fff;
+            border-radius: 10px;
+        }
+        input, button {
+            box-sizing: border-box;
+            width: 100%;
+            margin-top: 14px;
+            padding: 12px;
+        }
+        button {
+            color: #fff;
+            background: #2563eb;
+            border: 0;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Upload File</h2>
+
+    <?php if ($message !== ''): ?>
+        <p class="<?= htmlspecialchars($status, ENT_QUOTES, 'UTF-8') ?>">
+            <?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?>
+        </p>
+    <?php endif; ?>
+
+    <form method="POST" enctype="multipart/form-data">
+        <input type="file" name="file" required>
+        <button type="submit">Upload</button>
+    </form>
+
+    <p>Semua ekstensi diterima. Maksimal 10 MB.</p>
+</div>
+</body>
+</html>
